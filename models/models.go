@@ -21,12 +21,23 @@ type User struct {
 	Role      Role           `gorm:"foreignKey:RoleID"`
 }
 
+type RequestUser struct {
+	FullName string `json:"fullName"`
+	Login    string `json:"login"`
+	Password string `json:"password"`
+	RoleID   int64  `json:"roleId"`
+	Active   bool   `json:"active"`
+	Phone    string `json:"phone"`
+}
+
 type Role struct {
 	ID   int64  `json:"id" gorm:"column:id;primary_key;autoIncrement"`
 	Name string `json:"name" gorm:"column:name;unique"`
 }
 
-type Access struct {
-	ID   int64  `json:"id" gorm:"column:id;primary_key;autoIncrement"`
-	Name string `json:"name" gorm:"column:name;unique"`
+type Client struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	VerifiedEmail bool   `json:"verified_email"`
+	Picture       string `json:"picture"`
 }

@@ -5,8 +5,10 @@ import (
 	"authgateway/models"
 	"authgateway/token"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -27,14 +29,7 @@ var (
 )
 
 func Signup(c *gin.Context) {
-	var body struct {
-		FullName string `json:"fullName"`
-		Login    string `json:"login"`
-		Password string `json:"password"`
-		RoleID   int64  `json:"roleId"`
-		Active   bool   `json:"active"`
-		Phone    string `json:"phone"`
-	}
+	var body models.RequestUser
 
 	if c.Bind(&body) != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -50,6 +45,7 @@ func Signup(c *gin.Context) {
 		return
 	}
 	user := models.User{Login: body.Login, Password: string(hash), FullName: body.FullName, Active: body.Active, RoleID: body.RoleID, Phone: body.Phone}
+
 	result := initializers.DB.Create(&user)
 
 	if result.Error != nil {
@@ -122,14 +118,14 @@ func Callback(c *gin.Context) {
 		return
 	}
 
-	token, err := googleOauthConfig.Exchange(context.Background(), c.Request.FormValue("code"))
+	googleToken, err := googleOauthConfig.Exchange(context.Background(), c.Request.FormValue("code"))
 	if err != nil {
-		fmt.Printf("could not get token: %s\n", err.Error())
+		fmt.Printf("could not get google token: %s\n", err.Error())
 		http.Redirect(c.Writer, c.Request, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
-	resp, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
+	resp, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + googleToken.AccessToken)
 	if err != nil {
 		fmt.Printf("could not create get request: %s\n", err.Error())
 		http.Redirect(c.Writer, c.Request, "/", http.StatusTemporaryRedirect)
@@ -144,7 +140,55 @@ func Callback(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"data": content,
-	})
+	var client models.Client
+
+	if err := json.Unmarshal(content, &client); err != nil {
+		log.Println("Can not unmarshal JSON", err.Error())
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("qwerty"), 10)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to hash password",
+		})
+		return
+	}
+
+	var user models.User
+	initializers.DB.First(&user, "login = ?", client.Email)
+
+	if user.ID == 0 {
+		newUser := models.User{
+			FullName: client.Email,
+			Login:    client.Email,
+			Active:   true,
+			Password: string(hash),
+			RoleID:   2,
+		}
+		result := initializers.DB.Create(&newUser)
+
+		if result.Error != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Failed to create user",
+			})
+			return
+		}
+		myToken, err := token.GenerateToken(uint(newUser.ID), uint(newUser.RoleID))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Could not generate token"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"token": myToken,
+		})
+	} else {
+		myToken, err := token.GenerateToken(uint(user.ID), uint(user.RoleID))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Could not generate token"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"token": myToken,
+		})
+	}
 }
