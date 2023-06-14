@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +23,7 @@ var (
 		RedirectURL:  "http://localhost:7000/callback",
 		ClientID:     "641954038333-g5g3b3ls6g4ois400mvbm35luue4mm91.apps.googleusercontent.com",
 		ClientSecret: "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",
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
+		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
 	randomState = "random"
@@ -158,21 +159,26 @@ func Callback(c *gin.Context) {
 	initializers.DB.First(&user, "login = ?", client.Email)
 
 	if user.ID == 0 {
+
+		randID := rand.Int63()
+
 		newUser := models.User{
-			FullName: client.Email,
+			ID:       randID,
+			FullName: client.Name,
 			Login:    client.Email,
 			Active:   true,
 			Password: string(hash),
 			RoleID:   2,
 		}
-		result := initializers.DB.Create(&newUser)
 
+		result := initializers.DB.Create(&newUser)
 		if result.Error != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Failed to create user",
 			})
 			return
 		}
+
 		myToken, err := token.GenerateToken(uint(newUser.ID), uint(newUser.RoleID))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Could not generate token"})
