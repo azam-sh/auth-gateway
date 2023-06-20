@@ -102,14 +102,14 @@ func Login(c *gin.Context) {
 	})
 }
 
-func GoogleLogin(c *gin.Context) {
-	url := googleOauthConfig.AuthCodeURL(randomState)
-	http.Redirect(c.Writer, c.Request, url, http.StatusTemporaryRedirect)
-}
-
 func Home(c *gin.Context) {
 	var html = `<html><body><a href="/google/login">Google Log In</a></body></html>`
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+}
+
+func GoogleLogin(c *gin.Context) {
+	url := googleOauthConfig.AuthCodeURL(randomState)
+	http.Redirect(c.Writer, c.Request, url, http.StatusTemporaryRedirect)
 }
 
 func Callback(c *gin.Context) {
